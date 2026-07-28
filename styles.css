@@ -174,6 +174,38 @@ header.app-header {
   gap: 10px;
 }
 
+/* Cloud Status Badge */
+.cloud-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: var(--bg-subtle);
+  color: var(--text-main);
+  transition: var(--transition-fast);
+}
+
+.cloud-status-badge:hover {
+  border-color: var(--primary);
+}
+
+.cloud-status-badge.connected {
+  background: var(--status-normal-bg);
+  color: var(--status-normal-text);
+  border-color: var(--status-normal-border);
+}
+
+.cloud-status-badge.local {
+  background: var(--status-warning-bg);
+  color: var(--status-warning-text);
+  border-color: var(--status-warning-border);
+}
+
 .btn-icon {
   background: var(--bg-subtle);
   border: 1px solid var(--border-color);
@@ -338,63 +370,32 @@ header.app-header {
   background: var(--bg-card);
 }
 
-/* Section Header Badges */
-.section-banner {
-  background: var(--bg-subtle);
-  border-left: 4px solid var(--teal-accent);
-  padding: 12px 16px;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  margin: 24px 0 16px 0;
-}
-
-.section-banner h3 {
-  font-family: var(--font-heading);
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--text-main);
+/* Modal Styling */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 999;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  padding: 16px;
 }
 
-/* Interactive Chips / Pill Selectors for Anamnese */
-.chip-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.chip-btn {
-  background: var(--bg-subtle);
-  border: 1.5px solid var(--border-color);
-  border-radius: 999px;
-  padding: 8px 16px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-main);
-  cursor: pointer;
-  user-select: none;
-  transition: var(--transition-fast);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.chip-btn:hover {
-  border-color: var(--primary);
-  background: var(--primary-light);
-}
-
-.chip-btn.selected {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: white;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
-}
-
-.chip-checkbox {
-  border-radius: var(--radius-sm);
+.modal-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 580px;
+  padding: 24px;
+  box-shadow: var(--shadow-lg);
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 /* Questionnaire Item Card */
@@ -602,19 +603,6 @@ header.app-header {
 .patient-details p {
   font-size: 0.82rem;
   color: var(--text-muted);
-}
-
-/* History Evaluation Badges inside Patient View */
-.eval-item {
-  background: var(--bg-subtle);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px;
-  margin-top: 8px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.85rem;
 }
 
 /* Report View Styles */
