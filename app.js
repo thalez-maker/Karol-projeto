@@ -1,6 +1,17 @@
 /* ==========================================================================
-   MTA-SNAP-IV & Anamnese Online - Clinical Engine with Google Auth & Firestore
+   MTA-SNAP-IV & Anamnese Online - Embedded Central Firebase Cloud Engine
    ========================================================================== */
+
+// --- Central Firebase Cloud Configuration (Karol-Psicologia) ---
+const firebaseConfig = {
+  apiKey: "AIzaSyBiIly7mwqP_fqX-dBJ64uVtVLqBfRMwrY",
+  authDomain: "karol-psicologia.firebaseapp.com",
+  projectId: "karol-psicologia",
+  storageBucket: "karol-psicologia.firebasestorage.app",
+  messagingSenderId: "581049552986",
+  appId: "1:581049552986:web:35e7860a15799a90f54863",
+  measurementId: "G-51233XCZV8"
+};
 
 // --- SNAP-IV Questions Database (26 Items) ---
 const SNAP_QUESTIONS = [
@@ -45,12 +56,12 @@ const SNAP_OPTIONS = [
 ];
 
 // Global Application State
-let currentUser = null; // Currently logged in Firebase Google User
+let currentUser = null; // Currently logged in Psychologist
 let patients = JSON.parse(localStorage.getItem('snapiv_patients') || '[]');
 let activePatientId = localStorage.getItem('snapiv_active_patient') || null;
 let snapAnswers = {};
-let db = null; // Firestore Database reference
-let auth = null; // Firebase Auth reference
+let db = null;
+let auth = null;
 let isCloudConnected = false;
 let patientsUnsubscribe = null;
 
@@ -66,32 +77,26 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ==========================================================================
-// 1. FIREBASE AUTH & FIRESTORE ENGINE (GOOGLE SIGN-IN)
+// 1. EMBEDDED FIREBASE ENGINE (GOOGLE SIGN-IN & FIRESTORE)
 // ==========================================================================
 function initFirebaseEngine() {
-  const configBtn = document.getElementById('cloudStatusBtn');
-  if (configBtn) configBtn.addEventListener('click', openFirebaseConfigModal);
-
   const googleLoginBtn = document.getElementById('googleLoginBtn');
   if (googleLoginBtn) googleLoginBtn.addEventListener('click', handleGoogleLogin);
 
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
 
-  // Check saved Firebase configuration or default
-  const savedConfig = localStorage.getItem('snapiv_firebase_config');
-  if (savedConfig && typeof firebase !== 'undefined') {
+  if (typeof firebase !== 'undefined') {
     try {
-      const config = JSON.parse(savedConfig);
       if (!firebase.apps.length) {
-        firebase.initializeApp(config);
+        firebase.initializeApp(firebaseConfig);
       }
       db = firebase.firestore();
       auth = firebase.auth();
       isCloudConnected = true;
       updateCloudStatusUI();
 
-      // Listen for Authentication state changes (Google Sign-In)
+      // Listen for Authentication state changes
       auth.onAuthStateChanged(user => {
         if (user) {
           currentUser = user;
@@ -103,23 +108,15 @@ function initFirebaseEngine() {
       });
 
     } catch (e) {
-      console.error('Error initializing Firebase:', e);
+      console.error('Error initializing embedded Firebase:', e);
       isCloudConnected = false;
       updateCloudStatusUI();
     }
-  } else {
-    isCloudConnected = false;
-    updateCloudStatusUI();
   }
 }
 
 function handleGoogleLogin() {
-  if (!auth) {
-    openFirebaseConfigModal();
-    showToast('Por favor, configure o Firebase para habilitar o Login do Google.', true);
-    return;
-  }
-
+  if (!auth) return;
   const provider = new firebase.auth.GoogleAuthProvider();
   auth.signInWithPopup(provider).then(result => {
     showToast(`Bem-vindo(a), ${result.user.displayName}!`);
@@ -138,7 +135,6 @@ function handleLogout() {
 }
 
 function onUserLoggedIn(user) {
-  // Show Main App, Hide Login Screen
   const loginView = document.getElementById('loginView');
   const mainApp = document.getElementById('mainAppContent');
   const navTabs = document.querySelector('.nav-tabs-container');
@@ -147,7 +143,7 @@ function onUserLoggedIn(user) {
   if (mainApp) mainApp.style.display = 'block';
   if (navTabs) navTabs.style.display = 'block';
 
-  // Update Header Profile UI
+  // Update Header User Badge
   const profileBadge = document.getElementById('userProfileBadge');
   const avatarImg = document.getElementById('userAvatarImg');
   const userNameText = document.getElementById('userNameText');
@@ -156,7 +152,7 @@ function onUserLoggedIn(user) {
   if (avatarImg) avatarImg.src = user.photoURL || 'https://lh3.googleusercontent.com/a/default-user';
   if (userNameText) userNameText.textContent = user.displayName || user.email;
 
-  // Save/Update Psychologist Profile in Firestore
+  // Save/Update Psychologist Profile in Central Firestore
   if (db) {
     db.collection('users').doc(user.uid).set({
       uid: user.uid,
@@ -207,39 +203,12 @@ function updateCloudStatusUI() {
 
   if (isCloudConnected) {
     badge.className = 'cloud-status-badge connected';
-    badge.innerHTML = '🟢 Nuvem Firebase Ativa';
+    badge.innerHTML = '🟢 Karol-Psicologia (Nuvem Ativa)';
   } else {
     badge.className = 'cloud-status-badge local';
-    badge.innerHTML = '🟡 Armazenamento Local';
+    badge.innerHTML = '🟡 Conectando Nuvem...';
   }
 }
-
-function openFirebaseConfigModal() {
-  const modal = document.getElementById('firebaseConfigModal');
-  if (modal) modal.style.display = 'flex';
-}
-
-window.closeFirebaseModal = function() {
-  const modal = document.getElementById('firebaseConfigModal');
-  if (modal) modal.style.display = 'none';
-};
-
-window.saveFirebaseConfig = function() {
-  const jsonStr = document.getElementById('firebaseConfigJson').value.trim();
-  if (!jsonStr) {
-    showToast('Por favor, cole as chaves do Firebase.', true);
-    return;
-  }
-
-  try {
-    const parsed = JSON.parse(jsonStr);
-    localStorage.setItem('snapiv_firebase_config', JSON.stringify(parsed));
-    showToast('Configuração salva! Recarregando aplicação...');
-    setTimeout(() => location.reload(), 1000);
-  } catch (e) {
-    showToast('Formato JSON inválido. Verifique o texto colado.', true);
-  }
-};
 
 // ==========================================================================
 // 2. NAVIGATION TABS ENGINE
@@ -310,7 +279,7 @@ function handleAddPatient() {
 
   if (isCloudConnected && db && currentUser) {
     db.collection('patients').doc(newPatient.id).set(newPatient).then(() => {
-      showToast(`Paciente "${name}" salvo na sua conta do Google no banco de dados!`);
+      showToast(`Paciente "${name}" salvo no banco de dados na nuvem!`);
     }).catch(err => console.error(err));
   } else {
     showToast(`Paciente "${name}" salvo com sucesso!`);
@@ -370,7 +339,7 @@ function renderPatientsList() {
     container.innerHTML = `
       <div style="text-align: center; padding: 32px; color: var(--text-muted);">
         <i class="ph ph-folder-open" style="font-size: 3rem; margin-bottom: 8px;"></i>
-        <p>Nenhum paciente cadastrado para esta conta de psicólogo(a).</p>
+        <p>Nenhum paciente cadastrado nesta conta.</p>
       </div>
     `;
     return;
