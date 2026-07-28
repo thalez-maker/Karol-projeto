@@ -1,5 +1,5 @@
 /* ==========================================================================
-   MTA-SNAP-IV & Anamnese Online - Clinical System Engine with Firebase Cloud
+   MTA-SNAP-IV & Anamnese Online - Clinical Engine with Google Auth & Firestore
    ========================================================================== */
 
 // --- SNAP-IV Questions Database (26 Items) ---
@@ -44,12 +44,15 @@ const SNAP_OPTIONS = [
   { label: 'Demais', value: 3 }
 ];
 
-// Application State
+// Global Application State
+let currentUser = null; // Currently logged in Firebase Google User
 let patients = JSON.parse(localStorage.getItem('snapiv_patients') || '[]');
 let activePatientId = localStorage.getItem('snapiv_active_patient') || null;
 let snapAnswers = {};
-let db = null; // Firebase Firestore Database reference
+let db = null; // Firestore Database reference
+let auth = null; // Firebase Auth reference
 let isCloudConnected = false;
+let patientsUnsubscribe = null;
 
 // DOM Initialization
 document.addEventListener('DOMContentLoaded', () => {
@@ -60,17 +63,22 @@ document.addEventListener('DOMContentLoaded', () => {
   renderSnapQuestions();
   setupSnapEvents();
   setupAnamneseEvents();
-  updateActivePatientBanner();
 });
 
 // ==========================================================================
-// 1. FIREBASE CLOUD DATABASE ENGINE
+// 1. FIREBASE AUTH & FIRESTORE ENGINE (GOOGLE SIGN-IN)
 // ==========================================================================
 function initFirebaseEngine() {
   const configBtn = document.getElementById('cloudStatusBtn');
   if (configBtn) configBtn.addEventListener('click', openFirebaseConfigModal);
 
-  // Check saved Firebase configuration or init
+  const googleLoginBtn = document.getElementById('googleLoginBtn');
+  if (googleLoginBtn) googleLoginBtn.addEventListener('click', handleGoogleLogin);
+
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+
+  // Check saved Firebase configuration or default
   const savedConfig = localStorage.getItem('snapiv_firebase_config');
   if (savedConfig && typeof firebase !== 'undefined') {
     try {
@@ -79,24 +87,19 @@ function initFirebaseEngine() {
         firebase.initializeApp(config);
       }
       db = firebase.firestore();
+      auth = firebase.auth();
       isCloudConnected = true;
       updateCloudStatusUI();
 
-      // Realtime listener for Patients collection
-      db.collection('patients').onSnapshot((snapshot) => {
-        const cloudPatients = [];
-        snapshot.forEach(doc => {
-          cloudPatients.push({ id: doc.id, ...doc.data() });
-        });
-
-        if (cloudPatients.length > 0) {
-          patients = cloudPatients;
-          savePatientsToStorage(false); // update local without loop
-          renderPatientsList();
-          updateActivePatientBanner();
+      // Listen for Authentication state changes (Google Sign-In)
+      auth.onAuthStateChanged(user => {
+        if (user) {
+          currentUser = user;
+          onUserLoggedIn(user);
+        } else {
+          currentUser = null;
+          onUserLoggedOut();
         }
-      }, err => {
-        console.warn('Firebase snapshot warning:', err);
       });
 
     } catch (e) {
@@ -110,16 +113,104 @@ function initFirebaseEngine() {
   }
 }
 
+function handleGoogleLogin() {
+  if (!auth) {
+    openFirebaseConfigModal();
+    showToast('Por favor, configure o Firebase para habilitar o Login do Google.', true);
+    return;
+  }
+
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).then(result => {
+    showToast(`Bem-vindo(a), ${result.user.displayName}!`);
+  }).catch(error => {
+    console.error('Google Sign-in error:', error);
+    showToast(`Erro ao entrar com Google: ${error.message}`, true);
+  });
+}
+
+function handleLogout() {
+  if (auth) {
+    auth.signOut().then(() => {
+      showToast('Sessão encerrada.');
+    });
+  }
+}
+
+function onUserLoggedIn(user) {
+  // Show Main App, Hide Login Screen
+  const loginView = document.getElementById('loginView');
+  const mainApp = document.getElementById('mainAppContent');
+  const navTabs = document.querySelector('.nav-tabs-container');
+
+  if (loginView) loginView.style.display = 'none';
+  if (mainApp) mainApp.style.display = 'block';
+  if (navTabs) navTabs.style.display = 'block';
+
+  // Update Header Profile UI
+  const profileBadge = document.getElementById('userProfileBadge');
+  const avatarImg = document.getElementById('userAvatarImg');
+  const userNameText = document.getElementById('userNameText');
+
+  if (profileBadge) profileBadge.style.display = 'flex';
+  if (avatarImg) avatarImg.src = user.photoURL || 'https://lh3.googleusercontent.com/a/default-user';
+  if (userNameText) userNameText.textContent = user.displayName || user.email;
+
+  // Save/Update Psychologist Profile in Firestore
+  if (db) {
+    db.collection('users').doc(user.uid).set({
+      uid: user.uid,
+      name: user.displayName,
+      email: user.email,
+      photoURL: user.photoURL,
+      lastLogin: new Date().toISOString()
+    }, { merge: true });
+
+    // Subscribe to psychologist's patients in real-time
+    if (patientsUnsubscribe) patientsUnsubscribe();
+    
+    patientsUnsubscribe = db.collection('patients')
+      .where('psychologistId', '==', user.uid)
+      .onSnapshot(snapshot => {
+        const cloudPatients = [];
+        snapshot.forEach(doc => {
+          cloudPatients.push({ id: doc.id, ...doc.data() });
+        });
+
+        patients = cloudPatients;
+        savePatientsToStorage(false);
+        renderPatientsList();
+        updateActivePatientBanner();
+      }, err => {
+        console.warn('Realtime patients listener error:', err);
+      });
+  }
+}
+
+function onUserLoggedOut() {
+  const loginView = document.getElementById('loginView');
+  const mainApp = document.getElementById('mainAppContent');
+  const navTabs = document.querySelector('.nav-tabs-container');
+  const profileBadge = document.getElementById('userProfileBadge');
+
+  if (loginView) loginView.style.display = 'flex';
+  if (mainApp) mainApp.style.display = 'none';
+  if (navTabs) navTabs.style.display = 'none';
+  if (profileBadge) profileBadge.style.display = 'none';
+
+  if (patientsUnsubscribe) patientsUnsubscribe();
+}
+
 function updateCloudStatusUI() {
   const badge = document.getElementById('cloudStatusBtn');
   if (!badge) return;
 
   if (isCloudConnected) {
     badge.className = 'cloud-status-badge connected';
-    badge.innerHTML = '🟢 Nuvem Conectada (Firebase)';
+    badge.innerHTML = '🟢 Nuvem Firebase Ativa';
   } else {
     badge.className = 'cloud-status-badge local';
-    badge.innerHTML = '🟡 Armazenamento Local (Configurar Nuvem)';
+    badge.innerHTML = '🟡 Armazenamento Local';
   }
 }
 
@@ -182,7 +273,7 @@ function switchView(viewId) {
 }
 
 // ==========================================================================
-// 3. PATIENTS MANAGER ENGINE ("PACIENTES" FOLDER SYSTEM & CLOUD)
+// 3. PATIENTS MANAGER ENGINE ("PACIENTES" CLOUD & LOCAL)
 // ==========================================================================
 function initPatientsEngine() {
   const addBtn = document.getElementById('addPatientBtn');
@@ -203,6 +294,8 @@ function handleAddPatient() {
 
   const newPatient = {
     id: 'pat_' + Date.now(),
+    psychologistId: currentUser ? currentUser.uid : 'local_user',
+    psychologistEmail: currentUser ? currentUser.email : 'local',
     name: name,
     birthDate: birthDate,
     parentName: parentName,
@@ -214,14 +307,13 @@ function handleAddPatient() {
 
   patients.push(newPatient);
   savePatientsToStorage(true);
-  
-  // Save to Cloud if connected
-  if (isCloudConnected && db) {
+
+  if (isCloudConnected && db && currentUser) {
     db.collection('patients').doc(newPatient.id).set(newPatient).then(() => {
-      showToast(`Paciente "${name}" salvo na Nuvem Firebase!`);
-    }).catch(err => console.error('Cloud save error:', err));
+      showToast(`Paciente "${name}" salvo na sua conta do Google no banco de dados!`);
+    }).catch(err => console.error(err));
   } else {
-    showToast(`Pasta do paciente "${name}" criada em PACIENTES/${newPatient.name}!`);
+    showToast(`Paciente "${name}" salvo com sucesso!`);
   }
 
   setActivePatient(newPatient.id);
@@ -278,7 +370,7 @@ function renderPatientsList() {
     container.innerHTML = `
       <div style="text-align: center; padding: 32px; color: var(--text-muted);">
         <i class="ph ph-folder-open" style="font-size: 3rem; margin-bottom: 8px;"></i>
-        <p>Nenhum paciente cadastrado na pasta "PACIENTES".</p>
+        <p>Nenhum paciente cadastrado para esta conta de psicólogo(a).</p>
       </div>
     `;
     return;
@@ -340,15 +432,16 @@ window.exportPatientFolder = function(id) {
   if (!patient) return;
 
   const content = `=== PRONTUÁRIO CLÍNICO EM NUVEM: ${patient.name} ===
+Psicólogo(a) Responsável: ${currentUser ? currentUser.displayName + ' (' + currentUser.email + ')' : 'Local'}
 Diretório: ${patient.folderPath}
 Data de Cadastro: ${patient.createdAt}
 Responsável: ${patient.parentName || 'N/A'}
 Telefone: ${patient.phone || 'N/A'}
 
 ==================================================
-HISTÓRICO DE AVALIAÇÕES (${patient.evaluations.length}):
+HISTÓRICO DE AVALIAÇÕES (${patient.evaluations ? patient.evaluations.length : 0}):
 ==================================================
-${patient.evaluations.map((ev, i) => `
+${(patient.evaluations || []).map((ev, i) => `
 [AVALIAÇÃO #${i+1} - ${ev.type.toUpperCase()}]
 Data: ${ev.date}
 Título: ${ev.title}
@@ -365,7 +458,7 @@ Resumo: ${ev.summary}
   a.click();
   URL.revokeObjectURL(url);
 
-  showToast(`Relatório da pasta ${patient.folderPath} baixado!`);
+  showToast(`Prontuário de ${patient.name} exportado!`);
 };
 
 function saveEvaluationToActivePatient(evalType, title, summaryText) {
@@ -387,20 +480,19 @@ function saveEvaluationToActivePatient(evalType, title, summaryText) {
   patient.evaluations.push(newEval);
   savePatientsToStorage();
 
-  // Save to Firebase Cloud
-  if (isCloudConnected && db) {
+  if (isCloudConnected && db && currentUser) {
     db.collection('patients').doc(patient.id).set(patient, { merge: true }).then(() => {
-      showToast(`Avaliação sincronizada na nuvem na pasta "📁 ${patient.folderPath}"!`);
+      showToast(`Avaliação salva no prontuário do paciente na nuvem!`);
     }).catch(err => console.error(err));
   } else {
-    showToast(`Avaliação salva localmente na pasta "📁 ${patient.folderPath}"!`);
+    showToast(`Avaliação salva no prontuário do paciente!`);
   }
 
   renderPatientsList();
 }
 
 // ==========================================================================
-// 4. ANAMNESE CLINICAL ENGINE
+// 4. ANAMNESE ENGINE
 // ==========================================================================
 function setupAnamneseEvents() {
   const genBtn = document.getElementById('generateAnamneseBtn');
