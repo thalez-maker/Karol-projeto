@@ -4,10 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistema de Avaliação Psicológica - Anamnese & SNAP-IV</title>
-  <meta name="description" content="Plataforma de avaliação psicológica com Anamnese completa de Identificação, Escala SNAP-IV para TDAH/TOD e Gerenciador de Prontuários e Pastas de Pacientes.">
+  <meta name="description" content="Plataforma de avaliação psicológica com Anamnese completa de Identificação, Escala SNAP-IV para TDAH/TOD e Banco de Dados em Nuvem (Firebase).">
   <link rel="stylesheet" href="styles.css">
   <!-- Phosphor Icons -->
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <!-- Firebase SDK (v9 Compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
@@ -22,6 +26,11 @@
         </div>
       </div>
       <div class="header-actions">
+        <!-- Firebase Cloud Connection Status Badge -->
+        <button id="cloudStatusBtn" class="cloud-status-badge local" title="Clique para configurar o Banco de Dados em Nuvem (Firebase)">
+          🟡 Armazenamento Local
+        </button>
+
         <button id="themeToggleBtn" class="btn-icon" title="Alternar Modo Claro/Escuro">
           🌙
         </button>
@@ -34,7 +43,7 @@
     <div class="container nav-tabs">
       <button class="tab-btn active" data-view="patientsView">
         <i class="ph ph-folder-user"></i>
-        Central de Pacientes (Pastas)
+        Central de Pacientes (Prontuários)
       </button>
       <button class="tab-btn" data-view="anamneseView">
         <i class="ph ph-clipboard-text"></i>
@@ -66,9 +75,9 @@
          ==================================================================== -->
     <section id="patientsView">
       <div class="card">
-        <h2 class="card-title"><i class="ph ph-folder-plus"></i> Adicionar Novo Paciente (Gerar Pasta de Prontuário)</h2>
+        <h2 class="card-title"><i class="ph ph-folder-plus"></i> Adicionar Novo Paciente (Gerar Prontuário em Nuvem)</h2>
         <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 16px;">
-          Cada novo paciente cadastrado receberá uma pasta própria no diretório <code>PACIENTES / [Nome_do_Paciente]</code> para armazenar seus relatórios de Anamnese e SNAP-IV.
+          Cada paciente cadastrado terá sua pasta e prontuário salvos no banco de dados para acesso em tempo real no celular, tablet ou computador.
         </p>
 
         <div class="form-grid">
@@ -93,14 +102,14 @@
         <div class="actions-bar" style="margin-top: 16px;">
           <button id="addPatientBtn" class="btn btn-primary">
             <i class="ph ph-folder-notch-plus"></i>
-            Criar Pasta em "PACIENTES"
+            Criar Prontuário do Paciente
           </button>
         </div>
       </div>
 
       <!-- List of Patient Folders -->
       <div class="card">
-        <h2 class="card-title"><i class="ph ph-folders"></i> Diretório "PACIENTES" (Prontuários Cadastrados)</h2>
+        <h2 class="card-title"><i class="ph ph-folders"></i> Prontuários Cadastrados</h2>
         <div id="patientsListContainer"></div>
       </div>
     </section>
@@ -336,7 +345,7 @@
         </button>
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
           <button id="saveAnamneseToPatientBtn" class="btn btn-outline">
-            <i class="ph ph-folder-simple-plus"></i> Salvar na Pasta do Paciente
+            <i class="ph ph-cloud-arrow-up"></i> Salvar no Prontuário (Nuvem)
           </button>
           <button id="copyAnamneseProntuarioBtn" class="btn btn-outline">
             <i class="ph ph-copy"></i> Copiar Prontuário
@@ -434,11 +443,53 @@
 
   </main>
 
+  <!-- FIREBASE CONFIGURATION MODAL -->
+  <div id="firebaseConfigModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-family: var(--font-heading); font-size: 1.25rem; font-weight: 700; color: var(--text-main);">
+          ☁️ Conectar Banco de Dados em Nuvem (Firebase)
+        </h3>
+        <button onclick="closeFirebaseModal()" class="btn-icon" style="border: none; background: transparent; font-size: 1.3rem;">✕</button>
+      </div>
+
+      <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 16px;">
+        Ao conectar o Firebase, os prontuários e avaliações dos pacientes ficarão salvos na nuvem em tempo real e sincronizados entre computador, tablet e celular.
+      </p>
+
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label for="firebaseConfigJson">Cole aqui a sua Configuração do Firebase (JSON):</label>
+        <textarea id="firebaseConfigJson" style="height: 120px; font-family: monospace; font-size: 0.82rem;" placeholder='{
+  "apiKey": "AIzaSy...",
+  "authDomain": "seu-projeto.firebaseapp.com",
+  "projectId": "seu-projeto",
+  "storageBucket": "seu-projeto.appspot.com",
+  "messagingSenderId": "123456...",
+  "appId": "1:123456..."
+}'></textarea>
+      </div>
+
+      <div style="font-size: 0.8rem; background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 20px;">
+        <strong>Como obter gratuitamente:</strong>
+        <ol style="margin-left: 16px; margin-top: 4px;">
+          <li>Acesse <a href="https://console.firebase.google.com/" target="_blank" style="color: var(--primary);">console.firebase.google.com</a> com sua conta Google.</li>
+          <li>Clique em "Adicionar projeto" e crie um projeto com nome "Psicologia".</li>
+          <li>Em "Visão geral do projeto", clique no ícone Web <code>&lt;/&gt;</code> para copiar o código de configuração.</li>
+        </ol>
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button onclick="closeFirebaseModal()" class="btn btn-secondary">Cancelar</button>
+        <button onclick="saveFirebaseConfig()" class="btn btn-primary">Salvar e Conectar Nuvem</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Footer -->
   <footer class="app-footer">
     <div class="container">
       <p><strong>Plataforma Psicológica Integrada</strong> • Anamnese de Identificação & Escala MTA-SNAP-IV</p>
-      <p style="font-size: 0.78rem; margin-top: 4px; color: var(--text-light);">Desenvolvido para atendimento clínico e organização de prontuários.</p>
+      <p style="font-size: 0.78rem; margin-top: 4px; color: var(--text-light);">Desenvolvido para atendimento clínico e organização de prontuários em nuvem.</p>
     </div>
   </footer>
 
