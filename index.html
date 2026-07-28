@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistema de Avaliação Psicológica - Anamnese & SNAP-IV</title>
-  <meta name="description" content="Plataforma de avaliação psicológica com Anamnese completa, Escala SNAP-IV para TDAH/TOD e Autenticação de Psicólogos com Conta Google.">
+  <meta name="description" content="Plataforma de avaliação psicológica com Anamnese completa, Escala SNAP-IV para TDAH/TOD e Banco de Dados Central em Nuvem (Firebase).">
   <link rel="stylesheet" href="styles.css">
   <!-- Phosphor Icons -->
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
@@ -28,9 +28,9 @@
       </div>
       <div class="header-actions">
         <!-- Firebase Cloud Connection Status Badge -->
-        <button id="cloudStatusBtn" class="cloud-status-badge local" title="Status da Nuvem">
-          🟡 Armazenamento Local
-        </button>
+        <span id="cloudStatusBtn" class="cloud-status-badge connected">
+          🟢 Karol-Psicologia (Nuvem Ativa)
+        </span>
 
         <!-- Logged-in User Profile Badge -->
         <div id="userProfileBadge" class="user-profile-badge" style="display: none;">
@@ -56,7 +56,7 @@
       <div class="logo-icon" style="width: 60px; height: 60px; font-size: 30px; margin: 0 auto 16px auto;">Ψ</div>
       <h2 style="font-family: var(--font-heading); font-size: 1.6rem; font-weight: 700; color: var(--text-main);">Plataforma Psicológica Integrada</h2>
       <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 6px; line-height: 1.5;">
-        Acesso restrito para psicólogos(as). Faça login com sua conta do Google para gerenciar seus pacientes e prontuários na nuvem.
+        Acesso restrito para psicólogos(as). Faça login com sua conta do Google para acessar seus pacientes e prontuários na nuvem.
       </p>
 
       <button id="googleLoginBtn" class="google-btn">
@@ -467,44 +467,11 @@
     </main>
   </div>
 
-  <!-- FIREBASE CONFIGURATION MODAL -->
-  <div id="firebaseConfigModal" class="modal-backdrop" style="display: none;">
-    <div class="modal-card">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <h3 style="font-family: var(--font-heading); font-size: 1.25rem; font-weight: 700; color: var(--text-main);">
-          ☁️ Conectar Banco de Dados em Nuvem (Firebase)
-        </h3>
-        <button onclick="closeFirebaseModal()" class="btn-icon" style="border: none; background: transparent; font-size: 1.3rem;">✕</button>
-      </div>
-
-      <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 16px;">
-        Cole a sua configuração do Firebase para habilitar o Login com Google e sincronização em nuvem.
-      </p>
-
-      <div class="form-group" style="margin-bottom: 16px;">
-        <label for="firebaseConfigJson">Configuração do Firebase (JSON):</label>
-        <textarea id="firebaseConfigJson" style="height: 120px; font-family: monospace; font-size: 0.82rem;" placeholder='{
-  "apiKey": "AIzaSy...",
-  "authDomain": "seu-projeto.firebaseapp.com",
-  "projectId": "seu-projeto",
-  "storageBucket": "seu-projeto.appspot.com",
-  "messagingSenderId": "123456...",
-  "appId": "1:123456..."
-}'></textarea>
-      </div>
-
-      <div style="display: flex; gap: 10px; justify-content: flex-end;">
-        <button onclick="closeFirebaseModal()" class="btn btn-secondary">Cancelar</button>
-        <button onclick="saveFirebaseConfig()" class="btn btn-primary">Salvar e Conectar</button>
-      </div>
-    </div>
-  </div>
-
   <!-- Footer -->
   <footer class="app-footer">
     <div class="container">
       <p><strong>Plataforma Psicológica Integrada</strong> • Anamnese de Identificação & Escala MTA-SNAP-IV</p>
-      <p style="font-size: 0.78rem; margin-top: 4px; color: var(--text-light);">Desenvolvido para atendimento clínico com Autenticação de Psicólogos em Nuvem.</p>
+      <p style="font-size: 0.78rem; margin-top: 4px; color: var(--text-light);">Conectado ao Firebase Central (Karol-Psicologia).</p>
     </div>
   </footer>
 
