@@ -1,5 +1,5 @@
 /* ==========================================================================
-   MTA-SNAP-IV & Anamnese Online - Complete Clinical System Engine
+   MTA-SNAP-IV & Anamnese Online - Clinical System Engine with Firebase Cloud
    ========================================================================== */
 
 // --- SNAP-IV Questions Database (26 Items) ---
@@ -48,12 +48,14 @@ const SNAP_OPTIONS = [
 let patients = JSON.parse(localStorage.getItem('snapiv_patients') || '[]');
 let activePatientId = localStorage.getItem('snapiv_active_patient') || null;
 let snapAnswers = {};
-let anamneseData = {};
+let db = null; // Firebase Firestore Database reference
+let isCloudConnected = false;
 
-// DOM Ready Initialization
+// DOM Initialization
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   setupTabs();
+  initFirebaseEngine();
   initPatientsEngine();
   renderSnapQuestions();
   setupSnapEvents();
@@ -62,7 +64,94 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ==========================================================================
-// 1. NAVIGATION TABS ENGINE
+// 1. FIREBASE CLOUD DATABASE ENGINE
+// ==========================================================================
+function initFirebaseEngine() {
+  const configBtn = document.getElementById('cloudStatusBtn');
+  if (configBtn) configBtn.addEventListener('click', openFirebaseConfigModal);
+
+  // Check saved Firebase configuration or init
+  const savedConfig = localStorage.getItem('snapiv_firebase_config');
+  if (savedConfig && typeof firebase !== 'undefined') {
+    try {
+      const config = JSON.parse(savedConfig);
+      if (!firebase.apps.length) {
+        firebase.initializeApp(config);
+      }
+      db = firebase.firestore();
+      isCloudConnected = true;
+      updateCloudStatusUI();
+
+      // Realtime listener for Patients collection
+      db.collection('patients').onSnapshot((snapshot) => {
+        const cloudPatients = [];
+        snapshot.forEach(doc => {
+          cloudPatients.push({ id: doc.id, ...doc.data() });
+        });
+
+        if (cloudPatients.length > 0) {
+          patients = cloudPatients;
+          savePatientsToStorage(false); // update local without loop
+          renderPatientsList();
+          updateActivePatientBanner();
+        }
+      }, err => {
+        console.warn('Firebase snapshot warning:', err);
+      });
+
+    } catch (e) {
+      console.error('Error initializing Firebase:', e);
+      isCloudConnected = false;
+      updateCloudStatusUI();
+    }
+  } else {
+    isCloudConnected = false;
+    updateCloudStatusUI();
+  }
+}
+
+function updateCloudStatusUI() {
+  const badge = document.getElementById('cloudStatusBtn');
+  if (!badge) return;
+
+  if (isCloudConnected) {
+    badge.className = 'cloud-status-badge connected';
+    badge.innerHTML = '🟢 Nuvem Conectada (Firebase)';
+  } else {
+    badge.className = 'cloud-status-badge local';
+    badge.innerHTML = '🟡 Armazenamento Local (Configurar Nuvem)';
+  }
+}
+
+function openFirebaseConfigModal() {
+  const modal = document.getElementById('firebaseConfigModal');
+  if (modal) modal.style.display = 'flex';
+}
+
+window.closeFirebaseModal = function() {
+  const modal = document.getElementById('firebaseConfigModal');
+  if (modal) modal.style.display = 'none';
+};
+
+window.saveFirebaseConfig = function() {
+  const jsonStr = document.getElementById('firebaseConfigJson').value.trim();
+  if (!jsonStr) {
+    showToast('Por favor, cole as chaves do Firebase.', true);
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+    localStorage.setItem('snapiv_firebase_config', JSON.stringify(parsed));
+    showToast('Configuração salva! Recarregando aplicação...');
+    setTimeout(() => location.reload(), 1000);
+  } catch (e) {
+    showToast('Formato JSON inválido. Verifique o texto colado.', true);
+  }
+};
+
+// ==========================================================================
+// 2. NAVIGATION TABS ENGINE
 // ==========================================================================
 function setupTabs() {
   const tabs = document.querySelectorAll('.tab-btn');
@@ -75,20 +164,17 @@ function setupTabs() {
 }
 
 function switchView(viewId) {
-  // Update Tab Buttons
   document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.getAttribute('data-view') === viewId) btn.classList.add('active');
     else btn.classList.remove('active');
   });
 
-  // Hide all main views
   const views = ['patientsView', 'anamneseView', 'anamneseReportView', 'questionnaireView', 'reportView'];
   views.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
 
-  // Show target view
   const targetEl = document.getElementById(viewId);
   if (targetEl) targetEl.style.display = 'block';
 
@@ -96,7 +182,7 @@ function switchView(viewId) {
 }
 
 // ==========================================================================
-// 2. PATIENTS MANAGER ENGINE ("PACIENTES" FOLDER SYSTEM)
+// 3. PATIENTS MANAGER ENGINE ("PACIENTES" FOLDER SYSTEM & CLOUD)
 // ==========================================================================
 function initPatientsEngine() {
   const addBtn = document.getElementById('addPatientBtn');
@@ -127,20 +213,28 @@ function handleAddPatient() {
   };
 
   patients.push(newPatient);
-  savePatientsToStorage();
-  setActivePatient(newPatient.id);
+  savePatientsToStorage(true);
   
-  // Clear inputs
+  // Save to Cloud if connected
+  if (isCloudConnected && db) {
+    db.collection('patients').doc(newPatient.id).set(newPatient).then(() => {
+      showToast(`Paciente "${name}" salvo na Nuvem Firebase!`);
+    }).catch(err => console.error('Cloud save error:', err));
+  } else {
+    showToast(`Pasta do paciente "${name}" criada em PACIENTES/${newPatient.name}!`);
+  }
+
+  setActivePatient(newPatient.id);
+
   document.getElementById('newPatientName').value = '';
   document.getElementById('newPatientBirth').value = '';
   document.getElementById('newPatientParent').value = '';
   document.getElementById('newPatientPhone').value = '';
 
   renderPatientsList();
-  showToast(`Pasta do paciente "${name}" criada em PACIENTES/${newPatient.name}!`);
 }
 
-function savePatientsToStorage() {
+function savePatientsToStorage(syncCloud = true) {
   localStorage.setItem('snapiv_patients', JSON.stringify(patients));
 }
 
@@ -150,7 +244,6 @@ function setActivePatient(id) {
   updateActivePatientBanner();
   renderPatientsList();
 
-  // Fill form patient names automatically
   const patient = patients.find(p => p.id === id);
   if (patient) {
     const snapPatName = document.getElementById('patientName');
@@ -172,7 +265,7 @@ function updateActivePatientBanner() {
     if (patient) {
       b.innerHTML = `Paciente Ativo: <strong>${patient.name}</strong> <span style="font-size: 0.8rem; color: var(--text-muted);">(Pasta: 📁 ${patient.folderPath})</span>`;
     } else {
-      b.innerHTML = `Nenhum paciente selecionado. <a href="#" onclick="switchView('patientsView'); return false;" style="color: var(--primary);">Selecionar ou Adicionar na Central de Pacientes</a>`;
+      b.innerHTML = `Nenhum paciente selecionado. <a href="#" onclick="switchView('patientsView'); return false;" style="color: var(--primary);">Selecionar na Central de Pacientes</a>`;
     }
   });
 }
@@ -186,7 +279,6 @@ function renderPatientsList() {
       <div style="text-align: center; padding: 32px; color: var(--text-muted);">
         <i class="ph ph-folder-open" style="font-size: 3rem; margin-bottom: 8px;"></i>
         <p>Nenhum paciente cadastrado na pasta "PACIENTES".</p>
-        <p style="font-size: 0.85rem;">Utilize o formulário acima para adicionar o primeiro paciente.</p>
       </div>
     `;
     return;
@@ -215,10 +307,10 @@ function renderPatientsList() {
           <button class="btn btn-secondary" onclick="setActivePatient('${p.id}')">
             <i class="ph ph-check"></i> ${isActive ? 'Selecionado' : 'Selecionar'}
           </button>
-          <button class="btn btn-outline" onclick="exportPatientFolder('${p.id}')" title="Baixar relatório do paciente">
-            <i class="ph ph-download-simple"></i> Exportar Pasta
+          <button class="btn btn-outline" onclick="exportPatientFolder('${p.id}')">
+            <i class="ph ph-download-simple"></i> Exportar
           </button>
-          <button class="btn btn-secondary" onclick="deletePatient('${p.id}')" style="color: #ef4444;" title="Excluir paciente">
+          <button class="btn btn-secondary" onclick="deletePatient('${p.id}')" style="color: #ef4444;">
             <i class="ph ph-trash"></i>
           </button>
         </div>
@@ -232,6 +324,11 @@ window.deletePatient = function(id) {
     patients = patients.filter(p => p.id !== id);
     if (activePatientId === id) activePatientId = null;
     savePatientsToStorage();
+
+    if (isCloudConnected && db) {
+      db.collection('patients').doc(id).delete().catch(err => console.error(err));
+    }
+
     updateActivePatientBanner();
     renderPatientsList();
     showToast('Paciente removido.');
@@ -242,14 +339,14 @@ window.exportPatientFolder = function(id) {
   const patient = patients.find(p => p.id === id);
   if (!patient) return;
 
-  const content = `=== PASTA DO PACIENTE: ${patient.name} ===
-Diretório do Servidor/Drive: ${patient.folderPath}
+  const content = `=== PRONTUÁRIO CLÍNICO EM NUVEM: ${patient.name} ===
+Diretório: ${patient.folderPath}
 Data de Cadastro: ${patient.createdAt}
 Responsável: ${patient.parentName || 'N/A'}
 Telefone: ${patient.phone || 'N/A'}
 
 ==================================================
-AVALIAÇÕES REGISTRADAS (${patient.evaluations.length}):
+HISTÓRICO DE AVALIAÇÕES (${patient.evaluations.length}):
 ==================================================
 ${patient.evaluations.map((ev, i) => `
 [AVALIAÇÃO #${i+1} - ${ev.type.toUpperCase()}]
@@ -279,21 +376,31 @@ function saveEvaluationToActivePatient(evalType, title, summaryText) {
 
   if (!patient.evaluations) patient.evaluations = [];
 
-  patient.evaluations.push({
+  const newEval = {
     id: 'eval_' + Date.now(),
-    type: evalType, // 'snap' or 'anamnese'
+    type: evalType,
     title: title,
     date: new Date().toLocaleDateString('pt-BR'),
     summary: summaryText
-  });
+  };
 
+  patient.evaluations.push(newEval);
   savePatientsToStorage();
+
+  // Save to Firebase Cloud
+  if (isCloudConnected && db) {
+    db.collection('patients').doc(patient.id).set(patient, { merge: true }).then(() => {
+      showToast(`Avaliação sincronizada na nuvem na pasta "📁 ${patient.folderPath}"!`);
+    }).catch(err => console.error(err));
+  } else {
+    showToast(`Avaliação salva localmente na pasta "📁 ${patient.folderPath}"!`);
+  }
+
   renderPatientsList();
-  showToast(`Avaliação salva na pasta "📁 ${patient.folderPath}"!`);
 }
 
 // ==========================================================================
-// 3. ANAMNESE CLINICAL ENGINE
+// 4. ANAMNESE CLINICAL ENGINE
 // ==========================================================================
 function setupAnamneseEvents() {
   const genBtn = document.getElementById('generateAnamneseBtn');
@@ -314,26 +421,6 @@ function setupAnamneseEvents() {
   const saveBtn = document.getElementById('saveAnamneseToPatientBtn');
   if (saveBtn) saveBtn.addEventListener('click', saveAnamneseToPatientFolder);
 }
-
-// Interactive Chips toggle
-window.toggleChip = function(el, inputId, value) {
-  const hiddenInput = document.getElementById(inputId);
-  if (!hiddenInput) return;
-
-  // Multi select or Single select?
-  const parent = el.parentElement;
-  const isMulti = parent.classList.contains('chip-multi');
-
-  if (isMulti) {
-    el.classList.toggle('selected');
-    const selectedChips = Array.from(parent.querySelectorAll('.chip-btn.selected')).map(c => c.getAttribute('data-val'));
-    hiddenInput.value = selectedChips.join(', ');
-  } else {
-    parent.querySelectorAll('.chip-btn').forEach(c => c.classList.remove('selected'));
-    el.classList.add('selected');
-    hiddenInput.value = value;
-  }
-};
 
 function fillAnamneseDemoData() {
   document.getElementById('anam_name').value = 'Gabriel Silva Siqueira';
@@ -389,9 +476,7 @@ function generateAnamneseReport() {
   const queixa = document.getElementById('anam_queixa').value.trim() || 'Não informada.';
 
   const data = {
-    patientName,
-    birth,
-    age,
+    patientName, birth, age,
     natural: document.getElementById('anam_natural').value,
     address: document.getElementById('anam_address').value,
     mother: document.getElementById('anam_mother_name').value,
@@ -436,57 +521,45 @@ function renderAnamneseReportHTML(data) {
           <span class="value">${data.mother || 'Mãe'} / ${data.father || 'Pai'}</span>
         </div>
         <div class="info-item">
-          <span class="label">Data de Realização</span>
+          <span class="label">Data</span>
           <span class="value">${data.evalDate}</span>
         </div>
       </div>
     </div>
 
-    <!-- Queixa Principal Card -->
     <div class="card" style="border-left: 4px solid var(--primary);">
       <h3 class="card-title" style="color: var(--primary);"><i class="ph ph-chat-teardrop-text"></i> Queixa Principal & Motivo da Consulta</h3>
       <p style="font-size: 0.95rem; line-height: 1.6; white-space: pre-line;">${data.queixa}</p>
     </div>
 
-    <!-- Composição Familiar & Histórico -->
     <div class="card">
       <h3 class="card-title"><i class="ph ph-users"></i> Composição Familiar & Ambiente</h3>
       <ul style="list-style: none; display: grid; gap: 8px; font-size: 0.9rem;">
         <li><strong>Relação dos Pais:</strong> ${data.parentsRelation || 'Não informado'}</li>
-        <li><strong>Outros Moradores da Casa:</strong> ${data.otherHouse || 'Nenhum'}</li>
+        <li><strong>Outros Moradores:</strong> ${data.otherHouse || 'Nenhum'}</li>
         <li><strong>Naturalidade / Endereço:</strong> ${data.natural || '-'} • ${data.address || '-'}</li>
       </ul>
     </div>
 
-    <!-- Gestação & Parto -->
     <div class="card">
       <h3 class="card-title"><i class="ph ph-baby"></i> Gestação, Concepção e Parto</h3>
       <div style="display: grid; gap: 12px; font-size: 0.9rem;">
-        <div><strong>Concepção & Gestação:</strong> ${data.gestConcep || 'Sem alterações relatadas.'}</div>
-        <div><strong>Intercorrências / Doenças:</strong> ${data.gestDisease || 'Nenhuma.'}</div>
-        <div><strong>Condições do Parto:</strong> ${data.parto || 'Sem detalhes.'}</div>
+        <div><strong>Concepção & Gestação:</strong> ${data.gestConcep || 'Sem detalhes.'}</div>
+        <div><strong>Intercorrências:</strong> ${data.gestDisease || 'Nenhuma.'}</div>
+        <div><strong>Parto:</strong> ${data.parto || 'Sem detalhes.'}</div>
       </div>
     </div>
 
-    <!-- Desenvolvimento & Saúde -->
     <div class="card">
-      <h3 class="card-title"><i class="ph ph-heartbeat"></i> Desenvolvimento, Saúde e Hábitos</h3>
+      <h3 class="card-title"><i class="ph ph-heartbeat"></i> Desenvolvimento & Saúde</h3>
       <div style="display: grid; gap: 12px; font-size: 0.9rem;">
         <div><strong>Alimentação:</strong> ${data.alimenta || '-'}</div>
-        <div><strong>História Clínica & Vacinas:</strong> ${data.saude || '-'}</div>
-        <div><strong>Padrão de Sono:</strong> ${data.sono || '-'}</div>
-        <div><strong>Desenvolvimento Psicomotor:</strong> ${data.motor || '-'}</div>
-        <div><strong>Desenvolvimento da Linguagem:</strong> ${data.linguagem || '-'}</div>
-      </div>
-    </div>
-
-    <!-- Escolaridade & Comportamento -->
-    <div class="card">
-      <h3 class="card-title"><i class="ph ph-student"></i> Vida Escolar & Comportamento</h3>
-      <div style="display: grid; gap: 12px; font-size: 0.9rem;">
-        <div><strong>Histórico e Desempenho Escolar:</strong> ${data.escola || '-'}</div>
-        <div><strong>Perfil Comportamental e Afetivo:</strong> ${data.comportamento || '-'}</div>
-        <div><strong>Hábitos e Relacionamento:</strong> ${data.habitos || '-'}</div>
+        <div><strong>Saúde & Vacinas:</strong> ${data.saude || '-'}</div>
+        <div><strong>Sono:</strong> ${data.sono || '-'}</div>
+        <div><strong>Psicomotricidade:</strong> ${data.motor || '-'}</div>
+        <div><strong>Linguagem:</strong> ${data.linguagem || '-'}</div>
+        <div><strong>Escola:</strong> ${data.escola || '-'}</div>
+        <div><strong>Comportamento:</strong> ${data.comportamento || '-'}</div>
       </div>
     </div>
   `;
@@ -507,35 +580,20 @@ ${queixa}
 2. DADOS FAMILIARES:
 Mãe: ${document.getElementById('anam_mother_name').value || '-'}
 Pai: ${document.getElementById('anam_father_name').value || '-'}
-Relação dos Pais: ${document.getElementById('anam_parents_relation').value || '-'}
-
-3. GESTAÇÃO E PARTO:
-${document.getElementById('anam_gest_concep').value || '-'}
-Parto: ${document.getElementById('anam_parto').value || '-'}
-
-4. HISTÓRICO DE DESENVOLVIMENTO:
-Alimentação: ${document.getElementById('anam_alimenta').value || '-'}
-Sono: ${document.getElementById('anam_sono').value || '-'}
-Psicomotricidade: ${document.getElementById('anam_motor').value || '-'}
-Linguagem: ${document.getElementById('anam_linguagem').value || '-'}
-Escola: ${document.getElementById('anam_escola').value || '-'}
-Comportamento: ${document.getElementById('anam_comportamento').value || '-'}
 ==================================================`;
 
   navigator.clipboard.writeText(text).then(() => {
-    showToast('Anamnese formatada copiada para o Prontuário!');
+    showToast('Anamnese copiada para o Prontuário!');
   });
 }
 
 function saveAnamneseToPatientFolder() {
-  const patName = document.getElementById('anam_name').value.trim() || 'Paciente';
-  const summary = `Anamnese realizada em ${new Date().toLocaleDateString('pt-BR')}. Queixa principal: ${document.getElementById('anam_queixa').value.substring(0, 100)}...`;
-
+  const summary = `Anamnese realizada em ${new Date().toLocaleDateString('pt-BR')}. Queixa: ${document.getElementById('anam_queixa').value.substring(0, 100)}...`;
   saveEvaluationToActivePatient('anamnese', 'Anamnese de Identificação', summary);
 }
 
 // ==========================================================================
-// 4. SNAP-IV ENGINE
+// 5. SNAP-IV ENGINE
 // ==========================================================================
 function renderSnapQuestions() {
   const container = document.getElementById('questionsContainer');
@@ -694,7 +752,6 @@ function generateSnapReport() {
     desatStats, hiperStats, todStats
   });
 
-  // Automatically save to active patient folder
   saveEvaluationToActivePatient('snap', 'Avaliação SNAP-IV', `Desatenção: ${desatStats.significantCount}/9 | Hiperatividade: ${hiperStats.significantCount}/9 | TOD: ${todStats.significantCount}/8`);
 
   switchView('reportView');
@@ -718,30 +775,30 @@ function calculateSubscale(items, threshold) {
   if (threshold === 6) {
     if (significantCount >= 6) {
       status = 'positive';
-      statusText = 'Indicativo Elevado (Critério DSM-5 Preenchido)';
-      explanation = `Preencheu <strong>${significantCount} de 9 itens</strong> como "Bastante" ou "Demais" (Mínimo DSM-5 = 6). Apresenta elevada suspeição de TDAH nesta dimensão.`;
+      statusText = 'Indicativo Elevado (DSM-5 Preenchido)';
+      explanation = `Preencheu <strong>${significantCount} de 9 itens</strong> como "Bastante" ou "Demais". Indicativo clínico para Desatenção/Hiperatividade.`;
     } else if (significantCount === 5) {
       status = 'warning';
-      statusText = 'Zona de Observação Subclínica (5/6 Itens)';
-      explanation = `Preencheu <strong>5 de 9 itens</strong> como "Bastante" ou "Demais". Limite de atenção próximo do ponto de corte.`;
+      statusText = 'Zona de Observação (5/6 Itens)';
+      explanation = `Preencheu <strong>5 de 9 itens</strong> como "Bastante" ou "Demais". Limite de atenção.`;
     } else {
       status = 'normal';
       statusText = 'Baixa Relevância Clínica';
-      explanation = `Preencheu <strong>${significantCount} de 9 itens</strong> como "Bastante" ou "Demais". Dentro da faixa de normalidade.`;
+      explanation = `Preencheu <strong>${significantCount} de 9 itens</strong>. Dentro da faixa de normalidade.`;
     }
   } else {
     if (significantCount >= 4) {
       status = 'positive';
       statusText = 'Indicativo Elevado (TOD)';
-      explanation = `Preencheu <strong>${significantCount} de 8 itens</strong> como "Bastante" ou "Demais" (Ponto de corte = 4). Sintomas marcantes de Oposicionismo.`;
+      explanation = `Preencheu <strong>${significantCount} de 8 itens</strong> como "Bastante" ou "Demais". Sintomas de Oposicionismo.`;
     } else if (significantCount === 3) {
       status = 'warning';
-      statusText = 'Zona de Observação Subclínica (3/4 Itens)';
-      explanation = `Preencheu <strong>3 de 8 itens</strong> como "Bastante" ou "Demais". Comportamentos opositores moderados.`;
+      statusText = 'Zona de Observação (3/4 Itens)';
+      explanation = `Preencheu <strong>3 de 8 itens</strong>. Comportamentos opositores moderados.`;
     } else {
       status = 'normal';
       statusText = 'Baixa Relevância Clínica';
-      explanation = `Preencheu <strong>${significantCount} de 8 itens</strong>. Dentro da faixa de normalidade.`;
+      explanation = `Preencheu <strong>${significantCount} de 8 itens</strong>. Dentro da normalidade.`;
     }
   }
 
@@ -788,15 +845,14 @@ function renderSnapReportHTML(data) {
       </div>
     </div>
 
-    <!-- DOMÍNIOS -->
     <div class="result-card">
       <div class="result-card-header">
         <h3 class="result-title" style="color: var(--primary);">Domínio I: Desatenção</h3>
         <span class="status-badge ${data.desatStats.status}">${data.desatStats.statusText}</span>
       </div>
-      <p style="margin-bottom: 12px;">Itens significativos (Bastante/Demais): <strong>${data.desatStats.significantCount} de 9</strong> | Média: <strong>${data.desatStats.meanScore}</strong></p>
+      <p style="margin-bottom: 12px;">Itens significativos: <strong>${data.desatStats.significantCount} de 9</strong> | Média: <strong>${data.desatStats.meanScore}</strong></p>
       <div class="clinical-explanation">${data.desatStats.explanation}</div>
-      <details style="margin-top: 12px;"><summary style="cursor: pointer; font-size: 0.85rem; color: var(--text-muted);">Ver respostas detalhadas (01 a 09)</summary>${createTable(data.desatStats)}</details>
+      <details style="margin-top: 12px;"><summary style="cursor: pointer; font-size: 0.85rem; color: var(--text-muted);">Ver respostas (01 a 09)</summary>${createTable(data.desatStats)}</details>
     </div>
 
     <div class="result-card">
@@ -804,9 +860,9 @@ function renderSnapReportHTML(data) {
         <h3 class="result-title" style="color: var(--teal-accent);">Domínio II: Hiperatividade e Impulsividade</h3>
         <span class="status-badge ${data.hiperStats.status}">${data.hiperStats.statusText}</span>
       </div>
-      <p style="margin-bottom: 12px;">Itens significativos (Bastante/Demais): <strong>${data.hiperStats.significantCount} de 9</strong> | Média: <strong>${data.hiperStats.meanScore}</strong></p>
+      <p style="margin-bottom: 12px;">Itens significativos: <strong>${data.hiperStats.significantCount} de 9</strong> | Média: <strong>${data.hiperStats.meanScore}</strong></p>
       <div class="clinical-explanation" style="border-left-color: var(--teal-accent);">${data.hiperStats.explanation}</div>
-      <details style="margin-top: 12px;"><summary style="cursor: pointer; font-size: 0.85rem; color: var(--text-muted);">Ver respostas detalhadas (10 a 18)</summary>${createTable(data.hiperStats)}</details>
+      <details style="margin-top: 12px;"><summary style="cursor: pointer; font-size: 0.85rem; color: var(--text-muted);">Ver respostas (10 a 18)</summary>${createTable(data.hiperStats)}</details>
     </div>
 
     <div class="result-card">
@@ -814,9 +870,9 @@ function renderSnapReportHTML(data) {
         <h3 class="result-title" style="color: var(--accent-purple);">Domínio III: Oposicionismo / TOD</h3>
         <span class="status-badge ${data.todStats.status}">${data.todStats.statusText}</span>
       </div>
-      <p style="margin-bottom: 12px;">Itens significativos (Bastante/Demais): <strong>${data.todStats.significantCount} de 8</strong> | Média: <strong>${data.todStats.meanScore}</strong></p>
+      <p style="margin-bottom: 12px;">Itens significativos: <strong>${data.todStats.significantCount} de 8</strong> | Média: <strong>${data.todStats.meanScore}</strong></p>
       <div class="clinical-explanation" style="border-left-color: var(--accent-purple);">${data.todStats.explanation}</div>
-      <details style="margin-top: 12px;"><summary style="cursor: pointer; font-size: 0.85rem; color: var(--text-muted);">Ver respostas detalhadas (19 a 26)</summary>${createTable(data.todStats)}</details>
+      <details style="margin-top: 12px;"><summary style="cursor: pointer; font-size: 0.85rem; color: var(--text-muted);">Ver respostas (19 a 26)</summary>${createTable(data.todStats)}</details>
     </div>
   `;
 }
@@ -836,7 +892,6 @@ TOD / OPOSICIONISMO: ${calculateSubscale(SNAP_QUESTIONS.filter(q => q.domain ===
   });
 }
 
-// Global Utilities & Toast
 function showToast(message, isError = false) {
   let container = document.getElementById('toastContainer');
   if (!container) {
