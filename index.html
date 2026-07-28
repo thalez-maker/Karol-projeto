@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Avaliação Psicológica - Anamnese & SNAP-IV</title>
+  <meta name="description" content="Plataforma de avaliação psicológica com Anamnese completa de Identificação, Escala SNAP-IV para TDAH/TOD e Gerenciador de Prontuários e Pastas de Pacientes.">
+  <link rel="stylesheet" href="styles.css">
+  <!-- Phosphor Icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="container header-content">
+      <div class="logo-group">
+        <div class="logo-icon">Ψ</div>
+        <div class="logo-text">
+          <h1>Atendimento Psicológico</h1>
+          <span>Anamnese, Diagnóstico & Prontuários</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="themeToggleBtn" class="btn-icon" title="Alternar Modo Claro/Escuro">
+          🌙
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Top Navigation Tabs -->
+  <nav class="nav-tabs-container">
+    <div class="container nav-tabs">
+      <button class="tab-btn active" data-view="patientsView">
+        <i class="ph ph-folder-user"></i>
+        Central de Pacientes (Pastas)
+      </button>
+      <button class="tab-btn" data-view="anamneseView">
+        <i class="ph ph-clipboard-text"></i>
+        Anamnese Clínica
+      </button>
+      <button class="tab-btn" data-view="questionnaireView">
+        <i class="ph ph-brain"></i>
+        Escala SNAP-IV (TDAH/TOD)
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main View Container -->
+  <main class="container" style="flex: 1;">
+
+    <!-- Active Patient Banner Notification -->
+    <div class="active-patient-bar">
+      <div class="patient-badge-info">
+        <i class="ph ph-user" style="font-size: 1.3rem; color: var(--teal-accent);"></i>
+        <span class="active-patient-text">Carregando informações do paciente...</span>
+      </div>
+      <button class="btn btn-secondary" onclick="switchView('patientsView')" style="font-size: 0.8rem; padding: 6px 12px;">
+        <i class="ph ph-swap"></i> Trocar Paciente
+      </button>
+    </div>
+
+    <!-- ====================================================================
+         VIEW 1: PATIENTS MANAGER (DIRECTORIES & FOLDERS)
+         ==================================================================== -->
+    <section id="patientsView">
+      <div class="card">
+        <h2 class="card-title"><i class="ph ph-folder-plus"></i> Adicionar Novo Paciente (Gerar Pasta de Prontuário)</h2>
+        <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 16px;">
+          Cada novo paciente cadastrado receberá uma pasta própria no diretório <code>PACIENTES / [Nome_do_Paciente]</code> para armazenar seus relatórios de Anamnese e SNAP-IV.
+        </p>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="newPatientName">Nome Completo do Paciente *</label>
+            <input type="text" id="newPatientName" placeholder="Ex: Carolina Souza de Oliveira">
+          </div>
+          <div class="form-group">
+            <label for="newPatientBirth">Data de Nascimento</label>
+            <input type="date" id="newPatientBirth">
+          </div>
+          <div class="form-group">
+            <label for="newPatientParent">Nome do Responsável (Mãe/Pai)</label>
+            <input type="text" id="newPatientParent" placeholder="Ex: Ana Maria Souza">
+          </div>
+          <div class="form-group">
+            <label for="newPatientPhone">Telefone de Contato</label>
+            <input type="tel" id="newPatientPhone" placeholder="(00) 00000-0000">
+          </div>
+        </div>
+
+        <div class="actions-bar" style="margin-top: 16px;">
+          <button id="addPatientBtn" class="btn btn-primary">
+            <i class="ph ph-folder-notch-plus"></i>
+            Criar Pasta em "PACIENTES"
+          </button>
+        </div>
+      </div>
+
+      <!-- List of Patient Folders -->
+      <div class="card">
+        <h2 class="card-title"><i class="ph ph-folders"></i> Diretório "PACIENTES" (Prontuários Cadastrados)</h2>
+        <div id="patientsListContainer"></div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW 2: ANAMNESE CLINICAL QUESTIONNAIRE
+         ==================================================================== -->
+    <section id="anamneseView" style="display: none;">
+      
+      <!-- Top Action Bar -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+        <h2 style="font-family: var(--font-heading); font-size: 1.3rem; font-weight: 700;">Formulário de Anamnese de Identificação</h2>
+        <div style="display: flex; gap: 8px;">
+          <button id="fillAnamneseDemoBtn" class="btn btn-secondary" style="font-size: 0.85rem;">
+            <i class="ph ph-magic-wand"></i> Preencher Exemplo
+          </button>
+          <button id="generateAnamneseBtn" class="btn btn-primary" style="font-size: 0.85rem;">
+            <i class="ph ph-check-circle"></i> Gerar Relatório
+          </button>
+        </div>
+      </div>
+
+      <!-- Section 1: Identificação -->
+      <div class="card">
+        <h3 class="card-title"><i class="ph ph-identification-card"></i> 1. Identificação Geral do Paciente</h3>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="anam_name">Nome do Paciente / Criança</label>
+            <input type="text" id="anam_name" placeholder="Nome completo">
+          </div>
+          <div class="form-group">
+            <label for="anam_birth">Data de Nascimento</label>
+            <input type="date" id="anam_birth">
+          </div>
+          <div class="form-group">
+            <label for="anam_age">Idade</label>
+            <input type="text" id="anam_age" placeholder="Ex: 8 anos">
+          </div>
+          <div class="form-group">
+            <label for="anam_natural">Natural de</label>
+            <input type="text" id="anam_natural" placeholder="Cidade / UF">
+          </div>
+          <div class="form-group full-width">
+            <label for="anam_address">Endereço</label>
+            <input type="text" id="anam_address" placeholder="Rua, número, complemento">
+          </div>
+          <div class="form-group">
+            <label for="anam_district">Bairro</label>
+            <input type="text" id="anam_district">
+          </div>
+          <div class="form-group">
+            <label for="anam_city">Cidade</label>
+            <input type="text" id="anam_city">
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: Composição Familiar -->
+      <div class="card">
+        <h3 class="card-title"><i class="ph ph-users-three"></i> 2. Composição Familiar</h3>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="anam_mother_name">Nome da Mãe</label>
+            <input type="text" id="anam_mother_name">
+          </div>
+          <div class="form-group">
+            <label for="anam_mother_age">Idade da Mãe</label>
+            <input type="text" id="anam_mother_age">
+          </div>
+          <div class="form-group">
+            <label for="anam_mother_phone">Telefone</label>
+            <input type="text" id="anam_mother_phone">
+          </div>
+          <div class="form-group">
+            <label for="anam_mother_job">Profissão da Mãe</label>
+            <input type="text" id="anam_mother_job">
+          </div>
+          <div class="form-group">
+            <label for="anam_mother_school">Escolaridade da Mãe</label>
+            <input type="text" id="anam_mother_school">
+          </div>
+
+          <div class="form-group" style="grid-column: 1 / -1; margin-top: 12px;">
+            <hr style="border: 0; border-top: 1px solid var(--border-color);">
+          </div>
+
+          <div class="form-group">
+            <label for="anam_father_name">Nome do Pai</label>
+            <input type="text" id="anam_father_name">
+          </div>
+          <div class="form-group">
+            <label for="anam_father_age">Idade do Pai</label>
+            <input type="text" id="anam_father_age">
+          </div>
+          <div class="form-group">
+            <label for="anam_father_job">Profissão do Pai</label>
+            <input type="text" id="anam_father_job">
+          </div>
+
+          <div class="form-group full-width" style="margin-top: 8px;">
+            <label for="anam_parents_relation">Relação dos Pais Hoje (Casados / Divorciados / Quanto tempo / Outros relacionamentos)</label>
+            <input type="text" id="anam_parents_relation" placeholder="Ex: Casados há 10 anos. Boa convivência.">
+          </div>
+          <div class="form-group full-width">
+            <label for="anam_other_house">Outras Pessoas e Parentes que Moram com a Criança</label>
+            <input type="text" id="anam_other_house" placeholder="Ex: Irmão de 4 anos e avó materna.">
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 3: Queixa Principal -->
+      <div class="card" style="border-left: 4px solid var(--primary);">
+        <h3 class="card-title" style="color: var(--primary);"><i class="ph ph-warning-circle"></i> 3. Parecer Clínico e Identificação do Problema (Queixa)</h3>
+        <div class="form-group">
+          <label for="anam_queixa">Descreva detalhadamente o motivo da consulta, queixas do paciente e das pessoas de convívio:</label>
+          <textarea id="anam_queixa" placeholder="Descreva os sintomas percebidos, início dos comportamentos, histórico na escola ou em casa..."></textarea>
+        </div>
+      </div>
+
+      <!-- Section 4: Concepção e Gestação -->
+      <div class="card">
+        <h3 class="card-title"><i class="ph ph-baby"></i> 4. Concepção e Gestação</h3>
+        <div class="form-grid">
+          <div class="form-group full-width">
+            <label for="anam_gest_concep">Concepção (Filho natural/adotivo, idade dos pais na época, gravidez planejada ou casual, gestações/abortos anteriores):</label>
+            <input type="text" id="anam_gest_concep" placeholder="Ex: Filho natural; gravidez planejada; mãe tinha 27 anos na época.">
+          </div>
+          <div class="form-group full-width">
+            <label for="anam_gest_disease">Gestação e Intercorrências (Pré-natal, medicações, consumo de álcool/drogas, acidentes, infecções/doenças como rubéola, toxoplasmose, Covid, dengue, etc.):</label>
+            <textarea id="anam_gest_disease" placeholder="Relate se houve acompanhamento pré-natal, medicações ou intercorrências emocionais/físicas durante a gravidez."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 5: Parto & Nascimento -->
+      <div class="card">
+        <h3 class="card-title"><i class="ph ph-hospital"></i> 5. Parto e Nascimento</h3>
+        <div class="form-group">
+          <label for="anam_parto">Condições do Parto (Natural, Cesárea, Induzido, Fórceps, Apgar, icterícia, cordão no pescoço, peso, altura, internação):</label>
+          <textarea id="anam_parto" placeholder="Ex: Parto cesárea a termo (39 semanas). Peso: 3.200g, Altura: 49cm. Apgar 9/10. Não precisou de UTI neonatal."></textarea>
+        </div>
+      </div>
+
+      <!-- Section 6: Alimentação -->
+      <div class="card">
+        <h3 class="card-title"><i class="ph ph-cooking-pot"></i> 6. Alimentação</h3>
+        <div class="form-group">
+          <label for="anam_alimenta">Histórico Alimentar (Amamentação, mamadeira, introdução alimentar, preferências, hábito atual, voracidade, seletividade, horários):</label>
+          <textarea id="anam_alimenta" placeholder="Ex: Mamou no peito até 6 meses. Boa introdução alimentar. Atualmente se alimenta bem, porém apresenta voracidade e ansiedade durante as refeições."></textarea>
+        </div>
+      </div>
+
+      <!-- Section 7: História Clínica & Saúde -->
+      <div class="card">
+        <h3 class="card-title"><i class="ph ph-first-aid"></i> 7. História Clínica e Saúde Geral</h3>
+        <div class="form-group">
+          <label for="anam_saude">Doenças da infância (Febre alta, convulsões, otites, alergias, bronquite, caxumba, Covid, catapora, cirurgias, medicações contínuas):</label>
+          <textarea id="anam_saude" placeholder="Relate doenças de infância, cirurgias, internações, alergias ou medicações em uso contínuo."></textarea>
+        </div>
+      </div>
+
+      <!-- Section 8: Sono -->
+      <div class="card">
+        <h3 class="card-title"><i class="ph ph-moon"></i> 8. Padrão de Sono e Rotina</h3>
+        <div class="form-group">
+          <label for="anam_sono">Sono e Rotina (Onde dorme, costume de ir para a cama dos pais, horários, qualidade: tranquilo, agitado, rangimento de dentes, terror noturno, sonambulismo, ronco, boca aberta, hábitos ao acordar):</label>
+          <textarea id="anam_sono" placeholder="Ex: Dorme em seu próprio quarto. Deita às 21h30 e acorda às 07h. Sono levemente agitado, ocasionalmente fala dormindo."></textarea>
+        </div>
+      </div>
+
+      <!-- Section 9: Desenvolvimento Psicomotor -->
+      <div class="card">
+        <h3 class="card-title"><i class="ph ph-person-simple-run"></i> 9. Desenvolvimento Psicomotor</h3>
+        <div class="form-group">
+          <label for="anam_motor">Marcos do Desenvolvimento Motor (Idade em que sentou, se sentou em 'W', engatinhou de quatro/arrasto, idade em que andou, anda na ponta dos pés, quedas frequentes, dominância manual esquerda/direita, equilíbrio):</label>
+          <textarea id="anam_motor" placeholder="Ex: Sentou aos 6 meses, engatinhou aos 9 e andou com 1 ano e 1 mês. Dominância manual direita. Bom equilíbrio corporal."></textarea>
+        </div>
+      </div>
+
+      <!-- Section 10: Linguagem & Comunicação -->
+      <div class="card">
+        <h3 class="card-title"><i class="ph ph-chats-circle"></i> 10. Desenvolvimento da Linguagem e Fala</h3>
+        <div class="form-group">
+          <label for="anam_linguagem">Desenvolvimento da Fala (Idade das primeiras palavras, dificuldades na fala, bico/chupa dedo, compreensão de ordens, perfil de comunicação: ansioso, agitado, gritando, comunicativo):</label>
+          <textarea id="anam_linguagem" placeholder="Ex: Começou a falar palavras simples com 1 ano. Boa compreensão de ordens. Comunica-se de forma expressiva e rápida."></textarea>
+        </div>
+      </div>
+
+      <!-- Section 11: Escolaridade & Dificuldades -->
+      <div class="card">
+        <h3 class="card-title"><i class="ph ph-student"></i> 11. Escolaridade e Dificuldades Escolares</h3>
+        <div class="form-group">
+          <label for="anam_escola">Histórico Escolar e Desempenho (Idade em que entrou na escola, creche/pré, adaptação, histórico de repetência, autonomia nas tarefas, dificuldades de leitura, escrita, cálculo, foco ou organização):</label>
+          <textarea id="anam_escola" placeholder="Ex: Entrou na creche aos 3 anos. Boa adaptação social. Apresenta dificuldades na sustentação da atenção durante explicações longas e na organização do material escolar."></textarea>
+        </div>
+      </div>
+
+      <!-- Section 12: Comportamento & Afetividade -->
+      <div class="card">
+        <h3 class="card-title"><i class="ph ph-smiley"></i> 12. Perfil Comportamental e Afetivo</h3>
+        <div class="form-group">
+          <label for="anam_comportamento">Comportamento Habitual (Humor predominantemente, preferência por brincar sozinho ou em grupos, aceitação de ordens e limites, medos, teimosia, agressividade, autonomia, brinquedos preferidos):</label>
+          <textarea id="anam_comportamento" placeholder="Ex: Humor sociável e dinâmico. Gosta de brincar em grupo. Gosta de blocos de montar e jogos esportivos. Mostra certa resistência quando suas vontades são contrariadas."></textarea>
+        </div>
+      </div>
+
+      <!-- Section 13: Hábitos & Relacionamentos -->
+      <div class="card">
+        <h3 class="card-title"><i class="ph ph-heart"></i> 13. Hábitos e Relacionamentos</h3>
+        <div class="form-group">
+          <label for="anam_habitos">Hábitos Especiais e Relacionamentos (Roer unhas, tiques, manias, apego a objetos, facilidade em fazer amigos, relacionamento com pais, irmãos e professores, eventos de perdas/separações):</label>
+          <textarea id="anam_habitos" placeholder="Ex: Relaciona-se muito bem com colegas da mesma idade e com professores. Eventualmente roi unhas durante momentos de expectativa."></textarea>
+        </div>
+      </div>
+
+      <!-- Bottom Form Actions -->
+      <div class="actions-bar">
+        <button id="generateAnamneseBtn2" onclick="generateAnamneseReport()" class="btn btn-primary">
+          <i class="ph ph-check-circle"></i>
+          Gerar Relatório de Anamnese
+        </button>
+      </div>
+
+    </section>
+
+    <!-- ====================================================================
+         VIEW 3: ANAMNESE REPORT OUTPUT
+         ==================================================================== -->
+    <section id="anamneseReportView" style="display: none;">
+      <div class="actions-bar" style="margin-bottom: 20px; justify-content: space-between;">
+        <button id="backToAnamneseFormBtn" class="btn btn-secondary">
+          <i class="ph ph-arrow-left"></i> Voltar ao Formulário
+        </button>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button id="saveAnamneseToPatientBtn" class="btn btn-outline">
+            <i class="ph ph-folder-simple-plus"></i> Salvar na Pasta do Paciente
+          </button>
+          <button id="copyAnamneseProntuarioBtn" class="btn btn-outline">
+            <i class="ph ph-copy"></i> Copiar Prontuário
+          </button>
+          <button id="printAnamneseReportBtn" class="btn btn-primary">
+            <i class="ph ph-printer"></i> Imprimir / PDF
+          </button>
+        </div>
+      </div>
+
+      <div id="anamneseReportContent"></div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW 4: SNAP-IV QUESTIONNAIRE (TDAH / TOD)
+         ==================================================================== -->
+    <section id="questionnaireView" style="display: none;">
+      
+      <!-- Patient Identification Form -->
+      <div class="card">
+        <h2 class="card-title"><i class="ph ph-user-circle"></i> Identificação da Avaliação SNAP-IV</h2>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="patientName">Nome do Paciente / Criança</label>
+            <input type="text" id="patientName" placeholder="Ex: Gabriel Silva">
+          </div>
+          <div class="form-group">
+            <label for="responderName">Nome do Respondedor(a)</label>
+            <input type="text" id="responderName" placeholder="Ex: Mariana Silva">
+          </div>
+          <div class="form-group">
+            <label for="responderRole">Grau de Parentesco / Relação</label>
+            <select id="responderRole">
+              <option value="Mãe">Mãe</option>
+              <option value="Pai">Pai</option>
+              <option value="Professor(a)">Professor(a)</option>
+              <option value="Outra pessoa">Outra pessoa</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="evalDate">Data da Avaliação</label>
+            <input type="date" id="evalDate">
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress Bar -->
+      <div class="progress-container">
+        <div class="progress-header">
+          <span>Progresso do Preenchimento</span>
+          <span id="progressText">0 de 26 itens respondidos (0%)</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div id="progressFill" class="progress-bar-fill"></div>
+        </div>
+      </div>
+
+      <!-- Questions List Container -->
+      <div id="questionsContainer"></div>
+
+      <!-- Actions Bar -->
+      <div class="actions-bar">
+        <button id="fillDemoBtn" class="btn btn-secondary">
+          <i class="ph ph-magic-wand"></i> Preencher Exemplo
+        </button>
+        <button id="clearAnswersBtn" class="btn btn-secondary">
+          <i class="ph ph-trash"></i> Limpar
+        </button>
+        <button id="generateReportBtn" class="btn btn-primary">
+          <i class="ph ph-check-circle"></i> Gerar Relatório SNAP-IV
+        </button>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW 5: SNAP-IV REPORT OUTPUT
+         ==================================================================== -->
+    <section id="reportView" style="display: none;">
+      <div class="actions-bar" style="margin-bottom: 20px; justify-content: space-between;">
+        <button id="backToQuestionsBtn" class="btn btn-secondary">
+          <i class="ph ph-arrow-left"></i> Voltar ao Questionário
+        </button>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button id="copyProntuarioBtn" class="btn btn-outline">
+            <i class="ph ph-copy"></i> Copiar Prontuário
+          </button>
+          <button id="printReportBtn" class="btn btn-primary">
+            <i class="ph ph-printer"></i> Imprimir / PDF
+          </button>
+        </div>
+      </div>
+
+      <div id="reportViewContent"></div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div class="container">
+      <p><strong>Plataforma Psicológica Integrada</strong> • Anamnese de Identificação & Escala MTA-SNAP-IV</p>
+      <p style="font-size: 0.78rem; margin-top: 4px; color: var(--text-light);">Desenvolvido para atendimento clínico e organização de prontuários.</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
